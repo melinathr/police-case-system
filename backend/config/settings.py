@@ -11,6 +11,8 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
+import os
+import dj_database_url
 
 AUTH_USER_MODEL = "accounts.User"
 
@@ -25,12 +27,34 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-on)dv+-kf@w1=#*axb%^9vp&b(avbyw0@m&xbqd_2==i(hr1tp'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DEBUG", "1") == "1"
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
+
+PAYMENT_GATEWAY = os.getenv("PAYMENT_GATEWAY", "mock")
+FRONTEND_PAYMENT_RETURN_URL = os.getenv("FRONTEND_PAYMENT_RETURN_URL", "")
+ZARINPAL_MERCHANT_ID = os.getenv("ZARINPAL_MERCHANT_ID", "")
+ZARINPAL_SANDBOX = os.getenv("ZARINPAL_SANDBOX", "0") == "1"
+ZARINPAL_CURRENCY = os.getenv("ZARINPAL_CURRENCY", "IRR")
+ZARINPAL_REQUEST_URL = os.getenv("ZARINPAL_REQUEST_URL", "https://payment.zarinpal.com/pg/v4/payment/request.json")
+ZARINPAL_VERIFY_URL = os.getenv("ZARINPAL_VERIFY_URL", "https://payment.zarinpal.com/pg/v4/payment/verify.json")
+ZARINPAL_STARTPAY_URL = os.getenv("ZARINPAL_STARTPAY_URL", "https://payment.zarinpal.com/pg/StartPay/")
+ZARINPAL_REQUEST_URL_SANDBOX = os.getenv("ZARINPAL_REQUEST_URL_SANDBOX", "https://sandbox.zarinpal.com/pg/v4/payment/request.json")
+ZARINPAL_VERIFY_URL_SANDBOX = os.getenv("ZARINPAL_VERIFY_URL_SANDBOX", "https://sandbox.zarinpal.com/pg/v4/payment/verify.json")
+ZARINPAL_STARTPAY_URL_SANDBOX = os.getenv("ZARINPAL_STARTPAY_URL_SANDBOX", "https://sandbox.zarinpal.com/pg/StartPay/")
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+
+    "http://localhost:5174",      # ✅ add
+    "http://127.0.0.1:5174",      # ✅ add
+
+    "http://127.0.0.1:9000",
+    "http://localhost:9000",
+    "http://127.0.0.1:3001",
+    "http://localhost:3001",
 ]
 
 # Application definition
@@ -51,9 +75,15 @@ INSTALLED_APPS = [
     "evidence",
     "suspects",
     "rewards",
+    "intake",
+    "payments",
+
 
 
 ]
+
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
@@ -99,7 +129,7 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS':  [BASE_DIR / "templates"],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -118,10 +148,10 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    "default": dj_database_url.config(
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        conn_max_age=600,
+    )
 }
 
 

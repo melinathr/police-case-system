@@ -7,8 +7,9 @@ import Card from "../components/Card";
 import Button from "../components/Button";
 import Input from "../components/Input";
 import { useAuth } from "../features/auth/useAuth";
-import { login } from "../services/authService";
+import { login, register as registerUser } from "../services/authService";
 import { getApiErrorMessage } from "../services/apiErrors";
+import { setRefreshToken } from "../features/auth/authStorage";
 
 import {
   loginSchema,
@@ -79,6 +80,7 @@ function SignInForm() {
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -87,11 +89,20 @@ function SignInForm() {
 
   const onSubmit = async (values: LoginFormValues) => {
     try {
+      // loginSchema uses "email" field name, but it is actually the "identifier"
       const res = await login(values);
-      signIn(res.token);
+
+      // Store refresh token (same as before)
+      setRefreshToken(res.refresh);
+
+      // IMPORTANT CHANGE:
+      // signIn now needs both access token AND the backend user object (with roles).
+      signIn(res.access, res.user);
+
       navigate("/dashboard");
     } catch (err) {
-      alert(getApiErrorMessage(err));
+      const msg = getApiErrorMessage(err);
+      setError("email", { type: "server", message: msg });
     }
   };
 
@@ -99,12 +110,13 @@ function SignInForm() {
     <Card title="Welcome back">
       <form onSubmit={handleSubmit(onSubmit)} style={{ display: "grid", gap: 12 }}>
         <Input
-          label="Email"
-          placeholder="you@example.com"
-          autoComplete="email"
+          label="Identifier"
+          placeholder="username / email / phone / national id"
+          autoComplete="username"
           {...register("email")}
           error={errors.email?.message}
         />
+
         <Input
           label="Password"
           placeholder="••••••••"
@@ -114,7 +126,9 @@ function SignInForm() {
           error={errors.password?.message}
         />
 
-        <Button disabled={isSubmitting}>{isSubmitting ? "Signing in..." : "Sign in"}</Button>
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? "Signing in..." : "Sign in"}
+        </Button>
 
         <p style={{ margin: 0, fontSize: 13, color: "var(--muted)" }}>
           By continuing, you agree to the terms and privacy policy.
@@ -131,38 +145,103 @@ function SignUpForm() {
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { fullName: "", email: "", password: "", confirmPassword: "" },
+    defaultValues: {
+      username: "",
+      firstName: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      nationalId: "",
+      password: "",
+      confirmPassword: "",
+    },
   });
 
   const onSubmit = async (values: SignupFormValues) => {
-    await new Promise((r) => setTimeout(r, 300));
+    try {
+      await registerUser({
+        username: values.username,
+        firstName: values.firstName,
+        lastName: values.lastName,
+        email: values.email,
+        phone: values.phone,
+        nationalId: values.nationalId,
+        password: values.password,
+      });
 
-    // fake token for now
-    signIn(`fake-token:${values.email}`);
-    navigate("/dashboard");
+      // Auto sign-in after registration:
+      // login() expects the identifier field named "email" in LoginFormValues.
+      const res = await login({ email: values.email, password: values.password });
+
+      setRefreshToken(res.refresh);
+
+      // IMPORTANT CHANGE:
+      // signIn now needs both access token AND the backend user object (with roles).
+      signIn(res.access, res.user);
+
+      navigate("/dashboard");
+    } catch (err) {
+      const msg = getApiErrorMessage(err);
+      setError("email", { type: "server", message: msg });
+    }
   };
 
-  const passwordHint = useMemo(() => "Use at least 6 characters. Avoid common passwords.", []);
+  const passwordHint = useMemo(() => "Use at least 8 characters. Avoid common passwords.", []);
 
   return (
     <Card title="Create your account">
       <form onSubmit={handleSubmit(onSubmit)} style={{ display: "grid", gap: 12 }}>
         <Input
-          label="Full name"
-          placeholder="John Doe"
-          autoComplete="name"
-          {...register("fullName")}
-          error={errors.fullName?.message}
+          label="Username"
+          placeholder="your username"
+          autoComplete="username"
+          {...register("username")}
+          error={errors.username?.message}
         />
+
+        <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
+          <Input
+            label="First name"
+            placeholder="John"
+            autoComplete="given-name"
+            {...register("firstName")}
+            error={errors.firstName?.message}
+          />
+          <Input
+            label="Last name"
+            placeholder="Doe"
+            autoComplete="family-name"
+            {...register("lastName")}
+            error={errors.lastName?.message}
+          />
+        </div>
+
         <Input
           label="Email"
           placeholder="you@example.com"
           autoComplete="email"
           {...register("email")}
           error={errors.email?.message}
+        />
+
+        <Input
+          label="Phone"
+          placeholder="+49..."
+          autoComplete="tel"
+          {...register("phone")}
+          error={errors.phone?.message}
+        />
+
+        <Input
+          label="National ID"
+          placeholder="National ID"
+          autoComplete="off"
+          {...register("nationalId")}
+          error={errors.nationalId?.message}
         />
 
         <div style={{ display: "grid", gap: 10 }}>
@@ -186,7 +265,7 @@ function SignUpForm() {
           error={errors.confirmPassword?.message}
         />
 
-        <Button disabled={isSubmitting}>
+        <Button type="submit" disabled={isSubmitting}>
           {isSubmitting ? "Creating account..." : "Create account"}
         </Button>
       </form>
